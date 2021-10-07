@@ -4,6 +4,7 @@
 #include <WiFiUdp.h>
 #include <TimeLib.h>
 #include <DS1307RTC.h>
+#include <TimeAlarms.h>
 
 #define RTC_GND_PIN D4
 #define RTC_VCC_PIN D3
@@ -40,24 +41,21 @@ NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds);
 
 void setup() {
   Serial.begin(9600);
+
   pinMode(RTC_GND_PIN, OUTPUT);
   pinMode(RTC_VCC_PIN, OUTPUT);
   digitalWrite(RTC_GND_PIN, LOW);
   digitalWrite(RTC_VCC_PIN, HIGH);
 
-  setSyncProvider(RTC.get);
-  if (timeStatus() != timeSet) {
-    Serial.println("Unable to sync with the RTC");
-  } else {
-    Serial.println("RTC has set the system time");
-  }
   //wifiManager.resetSettings();
   wifiManager.setConfigPortalBlocking(false);
   wifiManager.autoConnect("Aquarium");
   server.begin();
   timeClient.begin();
-  delay(1000);
-  setTimeFromInternet();
+  setSyncProvider(timeSyncProvider);
+  if (timeStatus() != timeSet) {
+    Serial.println("Unable to sync time!");
+  }
 }
 
 void loop() {
@@ -87,17 +85,13 @@ void loop() {
 
             // turns the GPIOs on and off
             if (header.indexOf("GET /relay1/on") >= 0) {
-              relay1State = "on";
-              //digitalWrite(output5, HIGH);
+              turnOnRelay1();
             } else if (header.indexOf("GET /relay1/off") >= 0) {
-              relay1State = "off";
-              //digitalWrite(output5, LOW);
+              turnOffRelay1();
             } else if (header.indexOf("GET /relay2/on") >= 0) {
-              relay2State = "on";
-              //digitalWrite(output4, HIGH);
+              turnOnRelay2();
             } else if (header.indexOf("GET /relay2/off") >= 0) {
-              relay2State = "off";
-              //digitalWrite(output4, LOW);
+              turnOffRelay2();
             }
 
             // Display the HTML web page
@@ -131,6 +125,10 @@ void loop() {
             } else {
               client.println("<p><a href=\"/relay2/off\"><button class=\"button button2\">OFF</button></a></p>");
             }
+
+            client.println("<label for=\"appt\">Choose a time for your meeting:</label>");
+            client.println("<input type=\"time\" id=\"appt\" name=\"appt\"required>");
+            
             client.println("</body></html>");
 
             // The HTTP response ends with another blank line
@@ -153,19 +151,43 @@ void loop() {
     Serial.println("");
   }
   //Main Loop
+  Alarm.delay(1);
 }
 
+time_t timeSyncProvider() {
+  if (timeClient.update()) {
+    RTC.set(timeClient.getEpochTime());
+    return timeClient.getEpochTime();
+  } else {
+    return RTC.get();
+  }
 
-void setTimeFromInternet() {
-  timeClient.update();
-  setTime(timeClient.getEpochTime());
-  RTC.set(timeClient.getEpochTime());
 }
 
-String curentTimeToString(){
+String curentTimeToString() {
   return String(hour()) + ":" + String(minute()) + ":" + String(second());
 }
 
-String curentDateToString(){
+String curentDateToString() {
   return String(day()) + "." + String(month()) + "." + String(year());
+}
+
+void turnOffRelay1(){
+  digitalWrite(RELAY_1_PIN, HIGH);
+  relay1State = "off";
+}
+
+void turnOnRelay1(){
+  digitalWrite(RELAY_1_PIN, LOW);
+  relay1State = "on";
+}
+
+void turnOffRelay2(){
+  digitalWrite(RELAY_2_PIN, HIGH);
+  relay2State = "off";
+}
+
+void turnOnRelay2(){
+  digitalWrite(RELAY_2_PIN, LOW);
+  relay2State = "on";
 }
